@@ -1,0 +1,208 @@
+# Christy Jacob
+# CXJ170002
+# Navin Mathew
+# NSM170002
+# CS 4375 Section OW1
+
+
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+library(lattice)
+library(e1071)
+library(caret)
+library(parallel)
+library(iterators)
+library(foreach)
+library(doParallel)
+library(tidyverse)
+
+data <- read.table("bank-additional.csv", sep=";", header=TRUE)
+
+# improving the quality of the dataset by removing records with NA and duplicate objects
+clean.data <- unique(data[complete.cases(data),])
+
+#Create Tree With Default Settings (uses pre-pruning)
+tree_default <- rpart(y ~ ., data = clean.data)
+tree_default
+
+# plotting the default tree
+rpart.plot(tree_default, extra = 2, under = TRUE, varlen=0, faclen=0)
+
+# predicting the class label for objects of the bank dataset based on the tree default
+pred <- predict(tree_default, clean.data, type="class")
+head(pred)
+
+# creating confusion matrix for default tree
+confusion_table <- table(clean.data$y, pred)
+confusion_table
+
+# calculating accuracy
+# summing up the correctly predicted objects in default tree
+correct <- sum(diag(confusion_table))
+correct
+
+# finding the number of incorrectly predicted objects in default tree
+wrong <- sum(confusion_table)-correct
+wrong
+
+# calculating the accuracy in the default ree
+accuracy <- correct / (correct+wrong)
+accuracy
+
+# finding TPR, TNR, FNR, FPR of the default tree
+TPR <- confusion_table[2,2]/(confusion_table[2,2]+confusion_table[2,1])
+TPR
+TNR <- confusion_table[1,1]/(confusion_table[1,1]+confusion_table[1,2])
+TNR
+FNR <- confusion_table[2,1]/(confusion_table[2,2]+confusion_table[2,1])
+FNR
+FPR <- confusion_table[1,2]/(confusion_table[1,1]+confusion_table[1,2])
+FPR
+
+# displaying actual class label and predicted class labels of first ten objects
+pred[1:10]
+clean.data$y[1:10]
+error_rate <- 0/(0+10)
+error_rate
+
+#calculating the training error of default tree
+training_error<- wrong / (correct+wrong) 
+training_error
+# optimistic generalization error is the same as training error
+
+# calculating pessimistic generalization error of default tree
+pessimistic_error <- (wrong + (0.5*sum(tree_default$frame$var== "<leaf>")))/nrow(clean.data)
+pessimistic_error
+
+#Creating a full tree
+tree_full <- rpart(y ~., data=clean.data, control=rpart.control(minsplit=2, cp=0))
+
+# plotting the full tree
+rpart.plot(tree_full, extra = 2, under = TRUE,  varlen=0, faclen=0)
+
+# predicting the class label for objects of the bank dataset based on the full tree
+pred_full <- predict(tree_full, clean.data, type="class")
+
+# creating confusion matrix for full tree
+confusion_table_full <- table(clean.data$y, pred_full)
+confusion_table_full
+
+# calculating accuracy
+# summing up the correctly predicted objects in full tree
+correct_full <- sum(diag(confusion_table_full))
+correct_full
+
+# finding the number of incorrectly predicted objects in full tree
+wrong_full <- sum(confusion_table_full)-correct_full
+wrong_full
+
+# calculating the accuracy of full tree
+accuracy_full <- correct_full / (correct_full+wrong_full)
+accuracy_full
+
+# finding TPR, TNR, FNR, FPR of the full tree
+TPR_full <- confusion_table_full[2,2]/(confusion_table_full[2,2]+confusion_table_full[2,1])
+TPR_full
+TNR_full <- confusion_table_full[1,1]/(confusion_table_full[1,1]+confusion_table_full[1,2])
+TNR_full
+FNR_full <- confusion_table_full[2,1]/(confusion_table_full[2,2]+confusion_table_full[2,1])
+FNR_full
+FPR_full <- confusion_table_full[1,2]/(confusion_table_full[1,1]+confusion_table_full[1,2])
+FPR_full
+
+#calculating the training error of full tree
+training_error_full <- wrong_full / (correct_full+wrong_full) 
+training_error_full
+# optimistic generalization error is the same as training error
+
+# calculating pessimistic generalization error of full tree
+pessimistic_error_full <- (wrong_full + (0.5*sum(tree_full$frame$var== "<leaf>")))/nrow(clean.data)
+pessimistic_error_full
+
+# creating an underfitting tree
+tree_underfitting <- rpart(y ~., data=clean.data, control=rpart.control(maxdepth=2))
+tree_underfitting
+
+# plotting the underfitting tree
+rpart.plot(tree_underfitting, extra = 2, under = TRUE, varlen=0, faclen=0)
+
+# predicting the class label for objects of the bank dataset based on the underfitting tree
+pred_underfitting <- predict(tree_underfitting, clean.data, type="class")
+head(pred_underfitting)
+
+# creating confusion matrix for underfitting tree
+confusion_table_underfitting <- table(clean.data$y, pred_underfitting)
+confusion_table_underfitting
+
+# calculating error
+# summing up the correctly predicted objects in underfitting tree
+correct_underfitting <- sum(diag(confusion_table_underfitting))
+correct_underfitting
+
+# finding the number of incorrectly predicted objects in underfitting tree
+wrong_underfitting <- sum(confusion_table_full)-correct_underfitting
+wrong_underfitting
+
+#calculating the training error of the underfitting tree
+training_error_underfitting <- wrong_underfitting / (correct_underfitting+wrong_underfitting) 
+training_error_underfitting
+
+# accuracy function
+accuracy <- function(truth, prediction) {
+  tbl <- table(truth, prediction)
+  sum(diag(tbl))/sum(tbl)
+}
+
+# translate into factors(nominal)
+for(i in c(2:10,15))
+  clean.data[[i]] <- as.factor(clean.data[[i]])
+
+# sample with 2/3rds of objects in training dataset
+n_train <- as.integer((nrow(clean.data)*.66)) # gets number of 2/3 of rows in dataset
+train_id <- sample(1:nrow(clean.data), n_train) #gets a n_train random list of rows from the dataset
+train <- clean.data[train_id,] #create the training dataset
+test_type <- clean.data[-train_id, "y"]
+test <- clean.data[-train_id, colnames(clean.data) != "y"]#creates testing dataset out of rest
+tree <- rpart(y ~., data=train,control=rpart.control(minsplit=2))#creating decision tree
+# getting training and testing accuracies
+1- accuracy(train$y, predict(tree, train, type="class"))
+1- accuracy(test_type, predict(tree, test, type="class"))
+
+# sample with 150 objects in training dataset
+train_id2 <- sample(1:nrow(clean.data), 150)
+train2 <- clean.data[train_id2,] #create the training dataset
+test_type2 <- clean.data[-train_id2, "y"]
+test2 <- clean.data[-train_id2, colnames(clean.data) != "y"]#creates testing dataset  out of rest
+tree2 <- rpart(y ~., data=train2,control=rpart.control(minsplit=2))#creating decision tree
+# getting training and testing accuracies
+1 - accuracy(train2$y, predict(tree2, train2, type="class"))
+1 - accuracy(test_type2, predict(tree, test2, type="class"))
+  
+# doing 10-Fold Cross Validation
+index <- 1:nrow(clean.data)
+index <- sample(index) # shuffling index
+
+fold <- rep(1:10, each=nrow(clean.data)/10)[1:nrow(clean.data)]
+fold
+
+folds <- split(index, fold) ### creating list with indices for each fold
+folds
+
+#Do each fold
+train_errs <- vector(mode="numeric")
+test_errs <- vector(mode="numeric")
+for(i in 1:length(folds)) {
+  # creating the decision tree
+  tree <- rpart(y ~., data=clean.data[-folds[[i]],], control=rpart.control(minsplit=2))
+  # getting training errors
+  train_errs[i] <- 1-accuracy(clean.data[-folds[[i]],]$y, predict(tree, clean.data[-folds[[i]],], type="class"))
+  # getting testing errors
+  test_errs[i] <- 1-accuracy(clean.data[folds[[i]],]$y, predict(tree, clean.data[folds[[i]],], type="class"))
+  
+}
+train_errs
+test_errs
+
+#Report the average
+mean(test_errs)
